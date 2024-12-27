@@ -1,5 +1,5 @@
 import pandas as pd
-from src.pydbt import find_order_from_blocks_dict, get_sql_columns_string
+from src.dbtbasic import find_order_from_blocks_dict, get_sql_columns_string
 
 
 def test_order_block_dict():
