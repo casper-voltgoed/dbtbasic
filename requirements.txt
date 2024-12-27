@@ -1,0 +1,5 @@
+numpy==2.2.1
+pandas==2.2.3
+postgreasy==1.0.0
+psycopg2==2.9.9
+psycopg2_binary==2.9.9

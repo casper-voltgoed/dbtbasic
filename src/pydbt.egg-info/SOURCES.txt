@@ -1,0 +1,11 @@
+LICENSE
+README.md
+pyproject.toml
+src/logbasic/__init__.py
+src/logbasic/color_code.py
+src/logbasic/log_type_text.py
+src/logbasic.egg-info/PKG-INFO
+src/logbasic.egg-info/SOURCES.txt
+src/logbasic.egg-info/dependency_links.txt
+src/logbasic.egg-info/top_level.txt
+tests/test_generic.py
