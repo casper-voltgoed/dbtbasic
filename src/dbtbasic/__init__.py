@@ -1,8 +1,9 @@
+import enum
 import os
-import numpy as np
-import pandas as pd
-from psycopg2 import sql
-import postgreasy
+
+from src.dbtbasic.backend.base_backend import BaseBackend
+from src.dbtbasic.backend.duckdb_backend import DuckDBBackend
+from src.dbtbasic.backend.postgres_backend import PostgresBackend
 
 from .yaml import load_yaml_file
 
@@ -13,13 +14,27 @@ It loads the sql files in a folder and "realizes" them in the correct order and 
 """
 
 
-def create_sql_project(folder_path: str):
+class BackendType(enum.Enum):
+    postgres = 'postgres'
+    duckdb = 'duckdb'
+
+    def get_backend(self) -> BaseBackend:
+        if self == BackendType.postgres:
+            return PostgresBackend()
+        elif self == BackendType.duckdb:
+            return DuckDBBackend()
+        else:
+            raise Exception('No backend for this type')
+
+
+def create_sql_project(folder_path: str, backend_type: BackendType):
     """
     Converts the SQL and CSV files in a folder into tables/views, also adds indexes that are specified in an `index.yaml` file.
     The files in the folder will be created under the schema with the name of the folder.
     ## Params
         *  `folder_name`, The name of the folder in `include/sql/` where the files are located
     """
+    backend = backend_type.get_backend()
 
     if not os.path.isdir(folder_path):
         raise Exception(f'Cannot find folder in "sql" folder: {folder_path}')
@@ -31,14 +46,14 @@ def create_sql_project(folder_path: str):
 
     # create schema
     folder_name = os.path.basename(folder_path)
-    postgreasy.create_schema(folder_name)
+    backend.create_schema(folder_name)
 
     # create seeds
-    realize_seeds(folder_path)
+    realize_seeds(folder_path, backend)
 
     # create tables and views
     for sql_table_name in ordered_sql_tables:
-        realize_query(query=sql_file_dict[sql_table_name], table_name=sql_table_name, schema_name=folder_name)
+        realize_query(query=sql_file_dict[sql_table_name], table_name=sql_table_name, schema_name=folder_name, backend=backend)
 
     # create indices
     yaml_file_path = os.path.join(folder_path, 'index.yaml')
@@ -47,21 +62,7 @@ def create_sql_project(folder_path: str):
         yaml_dict = load_yaml_file(yaml_file_path)
 
         for sql_table, index_value in yaml_dict.items():
-            if isinstance(index_value, list):
-                index_query = sql.SQL('CREATE INDEX {index_name} ON {schema_name}.{table_name} ({column_list});').format(
-                    index_name=sql.Identifier(f'{sql_table}_{"-".join(index_value)}_idx'),
-                    schema_name=sql.Identifier(folder_name),
-                    table_name=sql.Identifier(sql_table),
-                    column_list=sql.SQL(', ').join(map(sql.Identifier, index_value)),
-                )
-            else:
-                index_query = sql.SQL('CREATE INDEX {index_name} ON {schema_name}.{table_name} ({column});').format(
-                    index_name=sql.Identifier(f'{sql_table}_{index_value}_idx'),
-                    schema_name=sql.Identifier(folder_name),
-                    table_name=sql.Identifier(sql_table),
-                    column=sql.Identifier(index_value),
-                )
-            postgreasy.execute(index_query)
+            backend.create_index(schema_name=folder_name, table_name=sql_table, index_columns=index_value)
 
 
 def find_sql_files(folder_path: str) -> dict[str, str]:
@@ -130,7 +131,7 @@ def find_order_from_blocks_dict(blocks_dict: dict[str, list[str]]) -> list:
     return order
 
 
-def realize_seeds(folder_path: str):
+def realize_seeds(folder_path: str, backend: BaseBackend):
     """
     TODO make dataframe types the column types (text, timestamp, numeric, integer only to keep it easy)
     Converts .csv files to sql tables. The name of the csv file will be the name of the csv file and the schema the name of the folder it is in
@@ -139,7 +140,6 @@ def realize_seeds(folder_path: str):
         * `postgres_db`, object to execute the sql queries
     """
     import os
-    import pandas as pd
 
     schema_name = os.path.basename(folder_path)
 
@@ -149,34 +149,11 @@ def realize_seeds(folder_path: str):
             if name.lower().endswith('.csv'):
                 table_name = name[:-4]
 
-                df = pd.read_csv(os.path.join(root, name))
-                columns = get_sql_columns_string(df)
-
-                postgreasy.create_table(schema_name, table_name, sql.SQL(columns))
-                postgreasy.insert_df(df, schema_name, table_name)
+                csv_file_path = os.path.join(root, name)
+                backend.upload_csv_as_table(schema_name, table_name, csv_file_path)
 
 
-def get_sql_columns_string(df: pd.DataFrame):
-    """
-    Make the sql query for the columns by getting their names and checking their type
-    """
-    col_texts = []
-    for col in df.columns:
-        dtype = df[col].dtype
-        sql_type = 'text'
-        if np.issubdtype(dtype, np.float_):  # type:ignore
-            sql_type = 'numeric'
-        elif np.issubdtype(dtype, np.integer):  # type:ignore
-            sql_type = 'integer'
-        elif np.issubdtype(dtype, np.datetime64):  # type:ignore
-            sql_type = 'timestamptz'
-
-        col_texts.append(f'{col} {sql_type}')
-
-    return ', '.join(col_texts)
-
-
-def realize_query(query: str, table_name: str, schema_name: str):
+def realize_query(query: str, table_name: str, schema_name: str, backend: BaseBackend):
     """
     Converts a SELECT sql query to a table/view. if the table name starts with `stg_` or `int_` it will become a view.
     ## Params
@@ -189,21 +166,7 @@ def realize_query(query: str, table_name: str, schema_name: str):
     query = query.replace('%', '%%')
 
     if table_name.startswith('stg_') or table_name.startswith('int_'):
-        # create as view
-        # we have to drop old view, in case columns are removed after update
-        creation_query = sql.SQL(
-            """
-            drop view if exists {schema_name}.{table_name} cascade;
-            create view         {schema_name}.{table_name} as ({query});
-            """
-        )
+        backend.create_view(schema_name, table_name, query)
 
     else:
-        creation_query = sql.SQL(
-            """
-            drop table if exists {schema_name}.{table_name};
-            create table         {schema_name}.{table_name} as ({query});
-            """
-        )
-
-    postgreasy.execute(creation_query.format(schema_name=sql.Identifier(schema_name), table_name=sql.Identifier(table_name), query=sql.SQL(query)))
+        backend.create_table(schema_name, table_name, query)
