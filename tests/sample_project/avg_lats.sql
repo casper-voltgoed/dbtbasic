@@ -1,2 +1,2 @@
-select avg(lat)
-from sample_project.cities
+select round(avg(lat) * avg(prcp),4)
+from sample_project.stg_lat_temps

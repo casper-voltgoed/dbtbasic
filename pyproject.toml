@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dbtbasic"
-version = "0.0.1"
+version = "0.0.2"
 description = "A simple version of dbt using postgres, implemented in Python. It loads the sql files in a folder and \"realizes\" them in the correct order and adds indices as well."
 
 authors = [{ name = "Casper Kole", email = "casper@voltgoed.nl" }]
@@ -16,7 +16,14 @@ classifiers = [
   "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
 ]
-dependencies = ["numpy>=2.2.1", "pandas>=2.2.3", "postgreasy>=1.1.0"]
+dependencies = [
+  "duckdb>=1.1.3",
+  "logbasic>=0.0.9",
+  "numpy>=2.2.1",
+  "pandas>=2.2.3",
+  "postgreasy>=1.1.0",
+  "pyyaml>=6.0.2",
+]
 
 
 [project.urls]
@@ -25,3 +32,6 @@ Issues = "https://github.com/casper-voltgoed/logbasic/issues"
 
 [tool.uv.workspace]
 members = ["dbtbasic"]
+
+[dependency-groups]
+dev = ["mypy>=1.14.0", "pytest>=8.3.4"]

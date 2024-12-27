@@ -1,6 +1,8 @@
 import enum
 import os
 
+import logbasic
+
 from src.dbtbasic.backend.base_backend import BaseBackend
 from src.dbtbasic.backend.duckdb_backend import DuckDBBackend
 from src.dbtbasic.backend.postgres_backend import PostgresBackend
@@ -43,6 +45,7 @@ def create_sql_project(folder_path: str, backend_type: BackendType):
     sql_file_dict = find_sql_files(folder_path)
 
     ordered_sql_tables = find_order(sql_file_dict)
+    print(ordered_sql_tables)
 
     # create schema
     folder_name = os.path.basename(folder_path)
@@ -91,20 +94,16 @@ def find_order(sql_files: dict[str, str]) -> list:
     # This dict shows which sql file "blocks" other sql files. The key blocks its value(s) so for example stg_x : [int_y, final_z], then the ordering is stg_x, int_y, final_z
     blocks_dict: dict[str, list[str]] = {}
     for sqlfile1 in sql_files:
+        blocks_dict[sqlfile1] = []
         for sqlfile2, sqlfile2_query in sql_files.items():
             # if the name of file 1 is mentioned in file 2. Then file 1 must be created before file 2 and so file 1 "blocks" file 2.
             if sqlfile1 in sqlfile2_query:
-                if sqlfile1 not in blocks_dict:
-                    blocks_dict[sqlfile1] = [sqlfile2]
-                else:
-                    blocks_dict[sqlfile1].append(sqlfile2)
-        # if the file blocks nothing, we still need to add it to the dictionary
-        else:
-            blocks_dict[sqlfile1] = []
+                blocks_dict[sqlfile1].append(sqlfile2)
 
+    logbasic.debug('Blocks dict:', blocks_dict)
     order = find_order_from_blocks_dict(blocks_dict)  # type:ignore
 
-    return order[::-1]
+    return order
 
 
 def find_order_from_blocks_dict(blocks_dict: dict[str, list[str]]) -> list:
@@ -128,7 +127,7 @@ def find_order_from_blocks_dict(blocks_dict: dict[str, list[str]]) -> list:
         if not visited[item]:
             dfs(item)
 
-    return order
+    return order[::-1]
 
 
 def realize_seeds(folder_path: str, backend: BaseBackend):
@@ -164,9 +163,9 @@ def realize_query(query: str, table_name: str, schema_name: str, backend: BaseBa
     """
     # % problem in python
     query = query.replace('%', '%%')
+    logbasic.debug(f'Realizing {table_name}')
 
     if table_name.startswith('stg_') or table_name.startswith('int_'):
         backend.create_view(schema_name, table_name, query)
-
     else:
         backend.create_table(schema_name, table_name, query)

@@ -61,7 +61,7 @@ def _get_sql_columns_string(df: pd.DataFrame):
     for col in df.columns:
         dtype = df[col].dtype
         sql_type = 'text'
-        if np.issubdtype(dtype, np.float_):  # type:ignore
+        if np.issubdtype(dtype, np.float64):  # type:ignore
             sql_type = 'numeric'
         elif np.issubdtype(dtype, np.integer):  # type:ignore
             sql_type = 'integer'

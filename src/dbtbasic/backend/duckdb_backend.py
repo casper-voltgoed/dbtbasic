@@ -11,10 +11,12 @@ class DuckDBBackend(BaseBackend):
         self.conn.sql(f'CREATE SCHEMA if not exists {schema_name};')
 
     def create_view(self, schema_name: str, table_name: str, query: str) -> None:
-        self.conn.sql(f'drop view if exists {schema_name}.{table_name} cascade; create view {schema_name}.{table_name} as ({query});')
+        string = f'drop view if exists {schema_name}.{table_name} cascade; create view {schema_name}.{table_name} as ({query});'
+        self.conn.sql(string)
 
     def create_table(self, schema_name: str, table_name: str, query: str) -> None:
         string = f'create table if not exists {schema_name}.{table_name} as ({query});'
+        self.conn.sql('show tables').show()
         self.conn.sql(string)
 
     def upload_csv_as_table(self, schema_name: str, table_name: str, csv_file_path: str) -> None:

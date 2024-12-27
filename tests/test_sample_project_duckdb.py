@@ -13,7 +13,13 @@ def test_all():
     create_sql_project(os.path.join('tests', 'sample_project'), BackendType.duckdb)
 
     conn = duckdb.connect('file.db')
-    result = conn.sql('select * from sample_project.stg_lat_temps limit 1').fetchall()
+
+    result = conn.sql('select * from sample_project.avg_lats limit 1').fetchall()[0][0]
     print(result)
 
-    assert result == [(1, 1, datetime.date(2023, 12, 1), 0.15)]
+    assert result == 0.806
+
+    result = conn.sql('select * from sample_project.stg_lat_temps limit 1').fetchall()[0]
+    print(result)
+
+    assert result == (1, 1, datetime.date(2023, 12, 1), 0.15)
